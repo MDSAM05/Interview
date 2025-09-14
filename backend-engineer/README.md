@@ -1,190 +1,342 @@
-# Backend Engineer Assessment
+## API Gateway (Traefik) example (not added to compose)
+## Testing
 
-Technical assessment for Backend Engineer candidates focusing on API development, database design, system architecture, and backend best practices.
+Install dev deps and run tests with coverage:
 
-## Overview
+```
+pip install -r requirements.txt
+pytest --cov=.
+```
 
-This assessment evaluates candidates on:
-- **API Design & Development** - RESTful APIs, GraphQL, microservices
-- **Database Design** - Data modeling, SQL optimization, NoSQL solutions
-- **System Architecture** - Scalability, performance, security
-- **Code Quality** - Clean code, testing, documentation
-- **DevOps Integration** - CI/CD, containerization, monitoring
+## Performance notes
 
-## Assessment Structure
+- Async stack throughout (FastAPI, asyncpg/httpx).  
+- Redis caching for product list (short TTL).  
+- DB indexes on usernames, product names, and order usernames.  
+- Use multiple uvicorn workers for CPU-bound routes; scale horizontally behind a gateway.
 
-### Problem 1: RESTful API Development
-**Difficulty**: Intermediate  
-**Time**: 2-3 hours  
-**Tech Stack**: FastAPI, PostgreSQL, Docker
+## Deployment and configuration
 
-Build a RESTful API for a task management system with:
-- User authentication and authorization
-- CRUD operations for tasks and projects
-- Database relationships and constraints
-- Input validation and error handling
-- API documentation with OpenAPI/Swagger
+- Configure `DATABASE_URL`, `JWT_*`, `OTEL_EXPORTER_OTLP_ENDPOINT`, `REDIS_URL`, and RabbitMQ envs.
+- Gateway: see Traefik example above. For Kubernetes, use Ingress and per-service Deployments.
 
-**Evaluation Criteria**:
-- API design patterns and REST conventions
-- Database schema design and relationships
-- Authentication and security implementation
-- Error handling and validation
-- Code organization and structure
-- Testing coverage and quality
+Create `gateway/traefik.yml`:
 
-### Problem 2: Microservice Architecture
-**Difficulty**: Advanced  
-**Time**: 3-4 hours  
-**Tech Stack**: FastAPI, Redis, Message Queue, Docker Compose
+```
+entryPoints:
+  web:
+    address: ":8080"
+providers:
+  file:
+    filename: "/etc/traefik/dynamic.yml"
+```
 
-Design and implement a microservice architecture for an e-commerce system:
-- User service (authentication, profiles)
-- Product service (catalog, inventory)
-- Order service (order management, payments)
-- Service communication and data consistency
-- API gateway and load balancing
+Create `gateway/dynamic.yml`:
 
-**Evaluation Criteria**:
-- Service decomposition and boundaries
-- Inter-service communication patterns
-- Data consistency strategies
-- Error handling and resilience
-- Performance and scalability considerations
-- Monitoring and observability
+```
+http:
+  routers:
+    user:
+      rule: "PathPrefix(`/users`)"
+      service: user
+    product:
+      rule: "PathPrefix(`/products`) || PathPrefix(`/inventory`)"
+      service: product
+    order:
+      rule: "PathPrefix(`/orders`)"
+      service: order
+  services:
+    user:
+      loadBalancer:
+        servers:
+          - url: "http://host.docker.internal:8001"
+    product:
+      loadBalancer:
+        servers:
+          - url: "http://host.docker.internal:8002"
+    order:
+      loadBalancer:
+        servers:
+          - url: "http://host.docker.internal:8003"
+```
 
-### Problem 3: Performance Optimization
-**Difficulty**: Advanced  
-**Time**: 2-3 hours  
-**Tech Stack**: FastAPI, PostgreSQL, Redis, Performance Testing
+Run Traefik separately if desired:
 
-Optimize a slow-performing API endpoint:
-- Database query optimization
-- Caching strategies
-- Connection pooling
-- Async processing
-- Performance benchmarking
+```
+docker run -p 8080:8080 -v $PWD/gateway/traefik.yml:/etc/traefik/traefik.yml -v $PWD/gateway/dynamic.yml:/etc/traefik/dynamic.yml traefik:v3.0
+```
+# Interview Microservices Architecture
 
-**Evaluation Criteria**:
-- Performance analysis and profiling
-- Database optimization techniques
-- Caching implementation
-- Async/await patterns
-- Performance testing methodology
-- Optimization results and metrics
+A comprehensive microservices-based e-commerce system built with FastAPI, Redis, RabbitMQ, and Docker Compose for interview demonstration.
+
+## Architecture Overview
+
+This project implements a microservices architecture with the following components:
+
+### Core Services
+Note: For local development in this setup, only infrastructure is containerized. You will run the FastAPI app locally on your host.
+
+### Infrastructure Services
+- **PostgreSQL**: Primary database (interview_db)
+- **Redis**: Caching and session management
+- **RabbitMQ**: Message queue with management UI
+- **Postman/Newman**: Optional CLI for API collections
+
+## Tech Stack
+
+- **Framework**: FastAPI
+- **Database**: PostgreSQL with SQLAlchemy ORM
+- **Cache**: Redis
+- **Message Queue**: RabbitMQ
+- **Containerization**: Docker & Docker Compose
+- **Containerization**: Docker & Docker Compose (infra only)
+- **Authentication**: JWT tokens with bcrypt password hashing
+
+## Features
+
+### User Service
+- User registration and authentication
+- JWT-based authentication
+- User profile management
+- Password hashing with bcrypt
+- Event-driven architecture for user events
+
+### Product Service
+- Product catalog management
+- Inventory tracking and management
+- Stock availability checking
+- Product search and filtering
+- Inventory transaction history
+- Event-driven inventory updates
+
+### Order Service
+- Order creation and management
+- Order status tracking
+- Payment processing (simulated)
+- Order cancellation
+- Payment history
+- Event-driven order processing
+
+### API Gateway
+- Centralized API entry point
+- Request routing to appropriate services
+- Load balancing
+- CORS handling
+- Health monitoring
+- Error handling and logging
 
 ## Getting Started
 
-1. **Clone the repository**
-   ```bash
-   git clone <repository-url>
-   cd backend-engineer
-   ```
+### Prerequisites
+- Docker and Docker Compose
+- Git
 
-2. **Choose a problem** from the list above
+### Quickstart (Infra only + Local FastAPI)
 
-3. **Set up your development environment**
-   ```bash
-   # Install dependencies
-   pip install -r requirements.txt
-   
-   # Set up Docker
-   docker-compose up -d
-   ```
-
-4. **Read the problem statement** in the `problems/` directory
-
-5. **Implement your solution** following the requirements
-
-6. **Run tests** to validate your implementation
-   ```bash
-   pytest tests/
-   ```
-
-7. **Submit your solution** by creating a pull request
-
-## Project Structure
-
-```
-backend-engineer/
-├── problems/              # Problem statements and requirements
-│   ├── problem-1/        # RESTful API Development
-│   ├── problem-2/        # Microservice Architecture
-│   └── problem-3/        # Performance Optimization
-├── starter-code/          # Starter templates and boilerplate
-├── tests/                 # Test suites and validation
-├── evaluation/            # Evaluation criteria and rubrics
-├── examples/              # Example solutions and best practices
-└── docs/                  # Additional documentation
+1. Clone the repository:
+```bash
+git clone <repository-url>
+cd backend-engineer
 ```
 
-## Evaluation Process
+2. Start infrastructure (Postgres, Redis, RabbitMQ, Newman/Postman):
+```bash
+docker-compose up -d
+```
 
-Your solution will be evaluated using:
+3. Create a `.env` file for the local FastAPI app in `backend-engineer/` with these values (host networking):
+```env
+DATABASE_URL=postgresql+asyncpg://interview_user:interview_password@localhost:5432/interview_db
+REDIS_URL=redis://:redis_password@localhost:6379/0
+RABBITMQ_URL=amqp://interview_user:interview_password@localhost:5672/interview_vhost
+```
 
-1. **Automated Testing** - Test execution and coverage analysis
-2. **Code Quality Analysis** - Linting, formatting, and complexity metrics
-3. **LLM Code Review** - AI-powered analysis of your implementation
-4. **Performance Testing** - Response time, throughput, and resource usage
-5. **Security Analysis** - Vulnerability assessment and best practices
-6. **Architecture Review** - Design patterns and scalability considerations
+4. Run the example FastAPI app locally (items CRUD):
+```bash
+cd backend-engineer
+uvicorn src.main:app --reload --port 9000
+```
 
-## Scoring Breakdown
+### Local URLs
 
-- **Functionality** (30%) - Does the solution work correctly?
-- **Code Quality** (25%) - Clean, readable, and maintainable code
-- **Architecture** (20%) - Good design patterns and structure
-- **Testing** (15%) - Test coverage and quality
-- **Performance** (10%) - Efficiency and optimization
+- **FastAPI app (local)**: http://localhost:9000/docs
+- **RabbitMQ Management**: http://localhost:15672 (interview_user/interview_password)
+- **PostgreSQL**: localhost:5432 (DB: interview_db, user: interview_user, pass: interview_password)
+- **Redis**: localhost:6379 (password: redis_password)
 
-## Submission Guidelines
+## API Documentation
 
-1. **Code Quality**
-   - Follow PEP 8 style guidelines
-   - Include comprehensive docstrings
-   - Use type hints where appropriate
-   - Implement proper error handling
+### Authentication Endpoints
 
-2. **Testing**
-   - Write unit tests for all functions
-   - Include integration tests for APIs
-   - Achieve at least 80% test coverage
-   - Test edge cases and error conditions
+#### Register User
+```bash
+POST /auth/register
+Content-Type: application/json
 
-3. **Documentation**
-   - Clear README with setup instructions
-   - API documentation with examples
-   - Architecture diagrams if applicable
-   - Deployment and configuration notes
+{
+  "email": "user@example.com",
+  "password": "password123",
+  "first_name": "John",
+  "last_name": "Doe",
+  "phone": "+1234567890"
+}
+```
 
-4. **Performance**
-   - Optimize database queries
-   - Implement appropriate caching
-   - Use async patterns where beneficial
-   - Include performance benchmarks
+#### Login User
+```bash
+POST /auth/login
+Content-Type: application/x-www-form-urlencoded
 
-## Best Practices
+email=user@example.com&password=password123
+```
 
-- **Start Simple** - Begin with a basic working solution
-- **Iterate** - Refactor and improve based on testing
-- **Test Early** - Write tests as you develop features
-- **Document** - Keep documentation up to date
-- **Optimize** - Profile and optimize performance bottlenecks
+### Product Endpoints
 
-## Resources
+#### Get Products
+```bash
+GET /products?category=electronics&search=laptop&skip=0&limit=10
+```
 
-- [FastAPI Documentation](https://fastapi.tiangolo.com/)
-- [PostgreSQL Documentation](https://www.postgresql.org/docs/)
-- [Docker Documentation](https://docs.docker.com/)
-- [Python Best Practices](https://docs.python-guide.org/)
-- [REST API Design](https://restfulapi.net/)
+#### Create Product
+```bash
+POST /products
+Authorization: Bearer <token>
+Content-Type: application/json
 
-## Support
+{
+  "name": "Laptop",
+  "description": "High-performance laptop",
+  "price": 999.99,
+  "category": "electronics",
+  "sku": "LAPTOP001",
+  "stock_quantity": 50
+}
+```
 
-If you have questions or need clarification:
-1. Check the problem documentation
-2. Review the example solutions
-3. Create an issue in the repository
-4. Contact the evaluation team
+### Order Endpoints
 
-Good luck with your assessment! 
+#### Create Order
+```bash
+POST /orders
+Authorization: Bearer <token>
+Content-Type: application/json
+
+{
+  "user_id": "user-uuid",
+  "items": [
+    {
+      "product_id": "product-uuid",
+      "quantity": 2,
+      "price": 999.99
+    }
+  ],
+  "shipping_address": {
+    "street": "123 Main St",
+    "city": "New York",
+    "state": "NY",
+    "zip": "10001",
+    "country": "US"
+  },
+  "billing_address": {
+    "street": "123 Main St",
+    "city": "New York",
+    "state": "NY",
+    "zip": "10001",
+    "country": "US"
+  }
+}
+```
+
+## Service Communication
+
+The microservices communicate through:
+
+1. **Synchronous Communication**: HTTP/REST API calls through the API Gateway
+2. **Asynchronous Communication**: RabbitMQ message queues for events
+3. **Data Sharing**: Shared PostgreSQL database with service-specific schemas
+
+### Event Types
+
+- `user.created`, `user.updated`, `user.deleted`
+- `product.created`, `product.updated`, `product.deleted`, `inventory.updated`
+- `order.created`, `order.updated`, `order.cancelled`, `payment.processed`
+
+## Data Consistency
+
+The system implements eventual consistency through:
+
+- **Event Sourcing**: Services publish events for state changes
+- **Saga Pattern**: Distributed transactions across services
+- **Compensating Actions**: Rollback mechanisms for failed operations
+- **Idempotency**: Operations can be safely retried
+
+## Monitoring and Health Checks
+
+Each service provides health check endpoints:
+- `/health` - Service health status
+- API Gateway aggregates health status from all services
+
+## Development
+
+### Running the sample FastAPI app
+
+The sample app lives in `src/` and exposes:
+
+- `POST /items` to add an item
+- `GET /items` to list items
+
+Run it with:
+```bash
+cd backend-engineer
+uvicorn src.main:app --reload --port 9000
+```
+
+### Database Migrations
+
+```bash
+# Generate migration
+alembic revision --autogenerate -m "Description"
+
+# Apply migrations
+alembic upgrade head
+```
+
+## Testing
+
+```bash
+# Run tests
+pytest
+
+# Run with coverage
+pytest --cov=.
+```
+
+## Production Considerations
+
+1. **Security**:
+   - Change default passwords and secrets
+   - Implement proper CORS policies
+   - Use HTTPS in production
+   - Implement rate limiting
+
+2. **Scalability**:
+   - Use container orchestration (Kubernetes)
+   - Implement horizontal scaling
+   - Use database connection pooling
+   - Implement caching strategies
+
+3. **Monitoring**:
+   - Add logging and monitoring
+   - Implement distributed tracing
+   - Set up alerting
+   - Monitor performance metrics
+
+4. **Data Management**:
+   - Implement database backups
+   - Use database replication
+   - Implement data archiving
+   - Monitor database performance
+
+## License
+
+This project is licensed under the MIT License.

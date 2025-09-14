@@ -1,0 +1,89 @@
+services:
+  # ===== COMMON SERVICES =====
+  postgres:
+    image: postgres:15-alpine
+    container_name: interview_postgres
+    environment:
+      POSTGRES_DB: interview_db
+      POSTGRES_USER: interview_user
+      POSTGRES_PASSWORD: interview_password
+      POSTGRES_INITDB_ARGS: "--encoding=UTF-8 --lc-collate=C --lc-ctype=C"
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./db-init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U interview_user -d interview_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - interview_network
+
+  redis:
+    image: redis:7-alpine
+    container_name: interview_redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes --requirepass redis_password
+    healthcheck:
+      test: ["CMD", "redis-cli", "--raw", "incr", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    networks:
+      - interview_network
+
+  rabbitmq:
+    image: rabbitmq:3.12-management-alpine
+    container_name: interview_rabbitmq
+    environment:
+      RABBITMQ_DEFAULT_USER: interview_user
+      RABBITMQ_DEFAULT_PASS: interview_password
+      RABBITMQ_DEFAULT_VHOST: interview_vhost
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - interview_network
+
+  memcached:
+    image: memcached:1.6-alpine
+    container_name: interview_memcached
+    ports:
+      - "11211:11211"
+    command: memcached -m 128
+    networks:
+      - interview_network
+
+  # ===== API TESTING TOOLS =====
+  postman:
+    image: postman/newman:latest
+    container_name: interview_postman
+    volumes:
+      - ./tests/postman:/etc/newman:ro
+    working_dir: /etc/newman
+    networks:
+      - interview_network
+
+volumes:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+  rabbitmq_data:
+    driver: local
+
+networks:
+  interview_network:
+    driver: bridge

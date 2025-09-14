@@ -1,0 +1,8 @@
+[run]
+branch = True
+source = problems,common
+omit = */__pycache__/*,*/tests/*
+
+[report]
+show_missing = True
+skip_covered = True
